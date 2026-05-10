@@ -5,6 +5,7 @@ from rq import get_current_job
 from app.config import get_settings
 from app.services.detector import YOLODetector
 from app.services.storage import write_task_result
+from app.services.visualization import render_detection_artifact
 
 
 def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
@@ -12,11 +13,13 @@ def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
     detector = YOLODetector(settings)
     job = get_current_job()
     results = []
+    artifacts = []
 
     for index, image_path in enumerate(image_paths, start=1):
         path = Path(image_path)
         response = detector.predict(image_bytes=path.read_bytes(), filename=path.name)
         results.append(response.model_dump())
+        artifacts.append(render_detection_artifact(settings, task_id, path, response))
 
         if job is not None:
             job.meta["completed"] = index
@@ -27,7 +30,7 @@ def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
         "total": len(results),
         "completed": len(results),
         "results": results,
+        "artifacts": artifacts,
     }
     write_task_result(settings, task_id, payload)
     return payload
-

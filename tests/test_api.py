@@ -117,3 +117,12 @@ def test_get_task_status() -> None:
     app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.json()["status"] == "pending"
+
+
+def test_get_empty_task_artifacts() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/v1/tasks/missing-task/artifacts")
+
+    assert response.status_code == 200
+    assert response.json() == {"task_id": "missing-task", "artifacts": []}

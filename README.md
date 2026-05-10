@@ -164,10 +164,23 @@ curl "http://127.0.0.1:8000/api/v1/tasks/{task_id}"
 curl "http://127.0.0.1:8000/api/v1/tasks/{task_id}/result"
 ```
 
+查询带框结果图片：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/tasks/{task_id}/artifacts"
+```
+
 结果会保存到：
 
 ```text
 outputs/{task_id}.json
+outputs/{task_id}/images/
+```
+
+`artifacts` 接口会返回图片 URL，例如：
+
+```text
+http://127.0.0.1:8000/artifacts/{task_id}/images/example.jpg
 ```
 
 ## 后续路线

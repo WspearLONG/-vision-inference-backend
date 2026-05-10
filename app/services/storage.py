@@ -19,6 +19,10 @@ def task_output_path(settings: Settings, task_id: str) -> Path:
     return Path(settings.output_dir) / f"{task_id}.json"
 
 
+def task_artifact_dir(settings: Settings, task_id: str) -> Path:
+    return Path(settings.output_dir) / task_id / "images"
+
+
 async def save_uploads(files: list[UploadFile], settings: Settings, task_id: str) -> list[str]:
     if not files:
         raise HTTPException(
@@ -65,4 +69,23 @@ def read_task_result(settings: Settings, task_id: str) -> dict | None:
     if not output_path.exists():
         return None
     return json.loads(output_path.read_text(encoding="utf-8"))
+
+
+def list_task_artifacts(settings: Settings, task_id: str) -> list[dict]:
+    artifact_dir = task_artifact_dir(settings, task_id)
+    if not artifact_dir.exists():
+        return []
+
+    artifacts = []
+    for path in sorted(artifact_dir.iterdir()):
+        if path.is_file():
+            relative_path = path.as_posix()
+            artifacts.append(
+                {
+                    "filename": path.name,
+                    "path": str(path),
+                    "url": f"/artifacts/{task_id}/images/{path.name}",
+                }
+            )
+    return artifacts
 

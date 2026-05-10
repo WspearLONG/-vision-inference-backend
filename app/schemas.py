@@ -41,3 +41,14 @@ class TaskStatusResponse(BaseModel):
     completed: int | None = None
     result_url: str | None = None
     error: str | None = None
+
+
+class Artifact(BaseModel):
+    filename: str
+    path: str
+    url: str
+
+
+class TaskArtifactsResponse(BaseModel):
+    task_id: str
+    artifacts: list[Artifact]
