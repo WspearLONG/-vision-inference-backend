@@ -14,6 +14,9 @@ class TaskQueue(Protocol):
     def enqueue_batch_detect(self, task_id: str, image_paths: list[str]) -> str:
         ...
 
+    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+        ...
+
     def get_status(self, task_id: str) -> TaskStatusResponse:
         ...
 
@@ -34,6 +37,25 @@ class RedisTaskQueue:
                 meta={"total": len(image_paths), "completed": 0},
                 result_ttl=86400,
                 failure_ttl=86400,
+            )
+            return job.id
+        except RedisError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Redis queue is unavailable",
+            ) from exc
+
+    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+        try:
+            job = self.queue.enqueue(
+                "app.worker.run_video_detect",
+                task_id,
+                video_path,
+                job_id=task_id,
+                meta={"total": None, "completed": 0},
+                result_ttl=86400,
+                failure_ttl=86400,
+                job_timeout=3600,
             )
             return job.id
         except RedisError as exc:
@@ -77,4 +99,3 @@ class RedisTaskQueue:
             result_url=f"/api/v1/tasks/{task_id}/result" if mapped_status == "succeeded" else None,
             error=error,
         )
-

@@ -7,11 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import get_db, init_db
-from app.schemas import BatchDetectCreateResponse, DetectResponse, HealthResponse, TaskArtifactsResponse, TaskStatusResponse
+from app.schemas import (
+    BatchDetectCreateResponse,
+    DetectResponse,
+    HealthResponse,
+    TaskArtifactsResponse,
+    TaskStatusResponse,
+    VideoTaskCreateResponse,
+)
 from app.services.detector import Detector, YOLODetector
 from app.services.queue import RedisTaskQueue, TaskQueue
-from app.services.storage import create_task_id, list_task_artifacts, read_task_result, save_uploads
-from app.services.tasks import create_task_record, get_task_status_from_db, list_task_artifacts_from_db
+from app.services.storage import create_task_id, list_task_artifacts, read_task_result, save_uploads, save_video_upload
+from app.services.tasks import create_task_record, create_video_task_record, get_task_status_from_db, list_task_artifacts_from_db
 
 
 @lru_cache
@@ -83,8 +90,36 @@ def create_app() -> FastAPI:
         task_queue.enqueue_batch_detect(task_id=task_id, image_paths=image_paths)
         return BatchDetectCreateResponse(task_id=task_id, status="pending", total=len(image_paths))
 
+    @app.post("/api/v1/video-tasks", response_model=VideoTaskCreateResponse, status_code=status.HTTP_202_ACCEPTED)
+    async def create_video_task(
+        video: UploadFile = File(...),
+        settings: Settings = Depends(get_settings),
+        task_queue: TaskQueue = Depends(get_task_queue),
+        db: Session = Depends(get_db),
+    ) -> VideoTaskCreateResponse:
+        task_id = create_task_id()
+        video_path = await save_video_upload(video, settings, task_id)
+        create_video_task_record(db, task_id, video_path)
+        task_queue.enqueue_video_detect(task_id=task_id, video_path=video_path)
+        return VideoTaskCreateResponse(
+            task_id=task_id,
+            status="pending",
+            filename=Path(video_path).name,
+            frame_stride=settings.video_frame_stride,
+            max_frames=settings.max_video_frames,
+        )
+
     @app.get("/api/v1/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
     def get_task_artifacts(
+        task_id: str,
+        settings: Settings = Depends(get_settings),
+        db: Session = Depends(get_db),
+    ) -> TaskArtifactsResponse:
+        artifacts = list_task_artifacts_from_db(db, task_id) or list_task_artifacts(settings, task_id)
+        return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
+
+    @app.get("/api/v1/video-tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
+    def get_video_task_artifacts(
         task_id: str,
         settings: Settings = Depends(get_settings),
         db: Session = Depends(get_db),
@@ -111,6 +146,10 @@ def create_app() -> FastAPI:
             )
         return result
 
+    @app.get("/api/v1/video-tasks/{task_id}/result")
+    def get_video_task_result(task_id: str, settings: Settings = Depends(get_settings)) -> dict:
+        return get_task_result(task_id, settings)
+
     @app.get("/api/v1/tasks/{task_id}", response_model=TaskStatusResponse)
     def get_task_status(
         task_id: str,
@@ -124,6 +163,14 @@ def create_app() -> FastAPI:
         if db_status is not None:
             return db_status
         return queue_status
+
+    @app.get("/api/v1/video-tasks/{task_id}", response_model=TaskStatusResponse)
+    def get_video_task_status(
+        task_id: str,
+        task_queue: TaskQueue = Depends(get_task_queue),
+        db: Session = Depends(get_db),
+    ) -> TaskStatusResponse:
+        return get_task_status(task_id, task_queue, db)
 
     return app
 

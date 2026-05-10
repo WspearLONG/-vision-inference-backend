@@ -218,6 +218,49 @@ outputs/{task_id}/images/
 http://127.0.0.1:8000/artifacts/{task_id}/images/example.jpg
 ```
 
+## 视频异步分析
+
+视频任务会按配置抽帧检测，默认每 30 帧处理 1 帧，最多处理 120 帧：
+
+```text
+VIDEO_FRAME_STRIDE=30
+MAX_VIDEO_FRAMES=120
+MAX_VIDEO_UPLOAD_MB=200
+```
+
+创建视频任务：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/video-tasks" ^
+  -F "video=@path/to/video.mp4"
+```
+
+查询视频任务状态：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/video-tasks/{task_id}"
+```
+
+查询视频分析结果：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/video-tasks/{task_id}/result"
+```
+
+查询关键帧带框图片：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/video-tasks/{task_id}/artifacts"
+```
+
+视频任务结果会保存到：
+
+```text
+outputs/{task_id}.json
+outputs/{task_id}/frames/
+outputs/{task_id}/images/
+```
+
 ## 后续路线
 
 - 增加 Redis + Celery，实现视频异步分析任务

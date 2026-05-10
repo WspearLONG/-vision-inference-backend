@@ -23,6 +23,10 @@ def task_artifact_dir(settings: Settings, task_id: str) -> Path:
     return Path(settings.output_dir) / task_id / "images"
 
 
+def task_frame_dir(settings: Settings, task_id: str) -> Path:
+    return Path(settings.output_dir) / task_id / "frames"
+
+
 async def save_uploads(files: list[UploadFile], settings: Settings, task_id: str) -> list[str]:
     if not files:
         raise HTTPException(
@@ -57,6 +61,29 @@ async def save_uploads(files: list[UploadFile], settings: Settings, task_id: str
     return saved_paths
 
 
+async def save_video_upload(file: UploadFile, settings: Settings, task_id: str) -> str:
+    if not file.content_type or not file.content_type.startswith("video/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="file must be a video",
+        )
+
+    data = await file.read()
+    max_bytes = settings.max_video_upload_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"video exceeds {settings.max_video_upload_mb} MB upload limit",
+        )
+
+    upload_dir = task_upload_dir(settings, task_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    filename = Path(file.filename or f"{uuid.uuid4().hex}.mp4").name
+    path = upload_dir / filename
+    path.write_bytes(data)
+    return str(path)
+
+
 def write_task_result(settings: Settings, task_id: str, payload: dict) -> str:
     output_path = task_output_path(settings, task_id)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,4 +115,3 @@ def list_task_artifacts(settings: Settings, task_id: str) -> list[dict]:
                 }
             )
     return artifacts
-

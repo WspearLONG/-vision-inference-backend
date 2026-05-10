@@ -34,6 +34,14 @@ class BatchDetectCreateResponse(BaseModel):
     total: int
 
 
+class VideoTaskCreateResponse(BaseModel):
+    task_id: str
+    status: str
+    filename: str
+    frame_stride: int
+    max_frames: int
+
+
 class TaskStatusResponse(BaseModel):
     task_id: str
     status: str

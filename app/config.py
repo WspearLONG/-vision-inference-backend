@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     confidence_threshold: float = 0.25
     image_size: int = 640
     max_upload_mb: int = 10
+    max_video_upload_mb: int = 200
+    video_frame_stride: int = 30
+    max_video_frames: int = 120
     redis_url: str = "redis://localhost:6379/0"
     queue_name: str = "vision-tasks"
     upload_dir: str = "uploads"

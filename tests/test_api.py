@@ -28,10 +28,16 @@ class StubTaskQueue:
     def __init__(self) -> None:
         self.task_id = ""
         self.image_paths: list[str] = []
+        self.video_path = ""
 
     def enqueue_batch_detect(self, task_id: str, image_paths: list[str]) -> str:
         self.task_id = task_id
         self.image_paths = image_paths
+        return task_id
+
+    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+        self.task_id = task_id
+        self.video_path = video_path
         return task_id
 
     def get_status(self, task_id: str) -> TaskStatusResponse:
@@ -126,3 +132,33 @@ def test_get_empty_task_artifacts() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"task_id": "missing-task", "artifacts": []}
+
+
+def test_create_video_task() -> None:
+    queue = StubTaskQueue()
+    app.dependency_overrides[get_task_queue] = lambda: queue
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/video-tasks",
+        files={"video": ("sample.mp4", b"fake-video-bytes", "video/mp4")},
+    )
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["filename"] == "sample.mp4"
+    assert queue.task_id == body["task_id"]
+    assert queue.video_path.endswith("sample.mp4")
+
+
+def test_rejects_non_video_upload() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/video-tasks",
+        files={"video": ("sample.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 400

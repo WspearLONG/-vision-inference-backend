@@ -18,6 +18,25 @@ def create_task_record(db: Session, task_id: str, image_paths: list[str]) -> Vis
     return task
 
 
+def create_video_task_record(db: Session, task_id: str, video_path: str) -> VisionTask:
+    task = VisionTask(id=task_id, status="pending", total=0, completed=0)
+    task.images = [
+        TaskImage(task_id=task_id, filename=Path(video_path).name, path=video_path)
+    ]
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+def update_task_total(db: Session, task_id: str, total: int) -> None:
+    task = db.get(VisionTask, task_id)
+    if task is None:
+        return
+    task.total = total
+    db.commit()
+
+
 def update_task_status(
     db: Session,
     task_id: str,
@@ -78,4 +97,3 @@ def list_task_artifacts_from_db(db: Session, task_id: str) -> list[dict]:
         {"filename": artifact.filename, "path": artifact.path, "url": artifact.url}
         for artifact in task.artifacts
     ]
-
