@@ -33,12 +33,27 @@ class DetectResponse(BaseModel):
     height: int
     detections: list[Detection]
     model: str
+    confidence_threshold: float | None = None
+    image_size: int | None = None
+
+
+class ModelResponse(BaseModel):
+    id: str
+    name: str
+    path: str
+    task_type: str
+    default_confidence: float
+    default_image_size: int
+    description: str | None = None
 
 
 class BatchDetectCreateResponse(BaseModel):
     task_id: str
     status: str
     total: int
+    model: str | None = None
+    confidence_threshold: float | None = None
+    image_size: int | None = None
 
 
 class VideoTaskCreateResponse(BaseModel):
@@ -47,6 +62,9 @@ class VideoTaskCreateResponse(BaseModel):
     filename: str
     frame_stride: int
     max_frames: int
+    model: str | None = None
+    confidence_threshold: float | None = None
+    image_size: int | None = None
 
 
 class TaskStatusResponse(BaseModel):

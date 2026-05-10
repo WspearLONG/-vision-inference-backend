@@ -73,6 +73,33 @@ curl -X POST "http://127.0.0.1:8000/api/v1/detect" ^
   -F "image=@path/to/image.jpg"
 ```
 
+## 模型注册表
+
+模型配置放在 `models/*.yaml`。当前默认模型：
+
+```text
+models/yolov8n.yaml
+```
+
+查看模型列表：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/models"
+```
+
+查看单个模型：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/models/yolov8n"
+```
+
+请求时可以覆盖模型和推理参数：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/detect?model_id=yolov8n&confidence=0.35&image_size=640" ^
+  -F "image=@path/to/image.jpg"
+```
+
 ## Docker 运行
 
 ```bash
@@ -187,6 +214,14 @@ curl -X POST "http://127.0.0.1:8000/api/v1/batch-detect" ^
   -F "images=@path/to/image-2.jpg"
 ```
 
+也可以指定模型和推理参数：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/batch-detect?model_id=yolov8n&confidence=0.35&image_size=640" ^
+  -F "images=@path/to/image-1.jpg" ^
+  -F "images=@path/to/image-2.jpg"
+```
+
 查询任务状态：
 
 ```bash
@@ -232,6 +267,13 @@ MAX_VIDEO_UPLOAD_MB=200
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/api/v1/video-tasks" ^
+  -F "video=@path/to/video.mp4"
+```
+
+也可以指定模型、推理参数和抽帧参数：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/video-tasks?model_id=yolov8n&confidence=0.35&image_size=640&frame_stride=15&max_frames=60" ^
   -F "video=@path/to/video.mp4"
 ```
 

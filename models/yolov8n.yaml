@@ -1,0 +1,8 @@
+id: yolov8n
+name: YOLOv8 Nano
+path: yolov8n.pt
+task_type: detection
+default_confidence: 0.25
+default_image_size: 640
+description: General-purpose COCO object detection model.
+

@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_name: str = "vision-inference-backend"
     app_env: str = "local"
     model_name: str = "yolov8n.pt"
+    model_config_dir: str = "models"
     confidence_threshold: float = 0.25
     image_size: int = 640
     max_upload_mb: int = 10

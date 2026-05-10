@@ -11,10 +11,10 @@ from app.schemas import TaskStatusResponse
 
 
 class TaskQueue(Protocol):
-    def enqueue_batch_detect(self, task_id: str, image_paths: list[str]) -> str:
+    def enqueue_batch_detect(self, task_id: str, image_paths: list[str], inference_options: dict) -> str:
         ...
 
-    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+    def enqueue_video_detect(self, task_id: str, video_path: str, inference_options: dict) -> str:
         ...
 
     def get_status(self, task_id: str) -> TaskStatusResponse:
@@ -27,12 +27,13 @@ class RedisTaskQueue:
         self.redis = Redis.from_url(settings.redis_url)
         self.queue = Queue(settings.queue_name, connection=self.redis)
 
-    def enqueue_batch_detect(self, task_id: str, image_paths: list[str]) -> str:
+    def enqueue_batch_detect(self, task_id: str, image_paths: list[str], inference_options: dict) -> str:
         try:
             job = self.queue.enqueue(
                 "app.worker.run_batch_detect",
                 task_id,
                 image_paths,
+                inference_options,
                 job_id=task_id,
                 meta={"total": len(image_paths), "completed": 0},
                 result_ttl=86400,
@@ -45,12 +46,13 @@ class RedisTaskQueue:
                 detail="Redis queue is unavailable",
             ) from exc
 
-    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+    def enqueue_video_detect(self, task_id: str, video_path: str, inference_options: dict) -> str:
         try:
             job = self.queue.enqueue(
                 "app.worker.run_video_detect",
                 task_id,
                 video_path,
+                inference_options,
                 job_id=task_id,
                 meta={"total": None, "completed": 0},
                 result_ttl=86400,

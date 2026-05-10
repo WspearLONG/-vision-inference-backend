@@ -8,12 +8,21 @@ from app.schemas import BoundingBox, DetectResponse, Detection, TaskStatusRespon
 
 
 class StubDetector:
-    def predict(self, image_bytes: bytes, filename: str) -> DetectResponse:
+    def predict(
+        self,
+        image_bytes: bytes,
+        filename: str,
+        model_id: str | None = None,
+        confidence: float | None = None,
+        image_size: int | None = None,
+    ) -> DetectResponse:
         return DetectResponse(
             filename=filename,
             width=32,
             height=32,
-            model="stub",
+            model=model_id or "stub",
+            confidence_threshold=confidence,
+            image_size=image_size,
             detections=[
                 Detection(
                     label="person",
@@ -29,15 +38,18 @@ class StubTaskQueue:
         self.task_id = ""
         self.image_paths: list[str] = []
         self.video_path = ""
+        self.inference_options: dict = {}
 
-    def enqueue_batch_detect(self, task_id: str, image_paths: list[str]) -> str:
+    def enqueue_batch_detect(self, task_id: str, image_paths: list[str], inference_options: dict) -> str:
         self.task_id = task_id
         self.image_paths = image_paths
+        self.inference_options = inference_options
         return task_id
 
-    def enqueue_video_detect(self, task_id: str, video_path: str) -> str:
+    def enqueue_video_detect(self, task_id: str, video_path: str, inference_options: dict) -> str:
         self.task_id = task_id
         self.video_path = video_path
+        self.inference_options = inference_options
         return task_id
 
     def get_status(self, task_id: str) -> TaskStatusResponse:
@@ -73,6 +85,16 @@ def test_root() -> None:
     body = response.json()
     assert body["docs"] == "/docs"
     assert body["endpoints"]["video_tasks"] == "/api/v1/video-tasks"
+    assert body["endpoints"]["models"] == "/api/v1/models"
+
+
+def test_list_models() -> None:
+    client = TestClient(app)
+
+    response = client.get("/api/v1/models")
+
+    assert response.status_code == 200
+    assert response.json()[0]["id"] == "yolov8n"
 
 
 def test_detect_image() -> None:
@@ -80,7 +102,7 @@ def test_detect_image() -> None:
     client = TestClient(app)
 
     response = client.post(
-        "/api/v1/detect",
+        "/api/v1/detect?model_id=yolov8n&confidence=0.5&image_size=320",
         files={"image": ("sample.png", make_png(), "image/png")},
     )
 
@@ -88,6 +110,9 @@ def test_detect_image() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["filename"] == "sample.png"
+    assert body["model"] == "yolov8n"
+    assert body["confidence_threshold"] == 0.5
+    assert body["image_size"] == 320
     assert body["detections"][0]["label"] == "person"
 
 
@@ -108,7 +133,7 @@ def test_create_batch_detect_task() -> None:
     client = TestClient(app)
 
     response = client.post(
-        "/api/v1/batch-detect",
+        "/api/v1/batch-detect?model_id=yolov8n&confidence=0.4&image_size=320",
         files=[
             ("images", ("sample-1.png", make_png(), "image/png")),
             ("images", ("sample-2.png", make_png(), "image/png")),
@@ -120,8 +145,11 @@ def test_create_batch_detect_task() -> None:
     body = response.json()
     assert body["status"] == "pending"
     assert body["total"] == 2
+    assert body["model"] == "yolov8n"
     assert queue.task_id == body["task_id"]
     assert len(queue.image_paths) == 2
+    assert queue.inference_options["confidence"] == 0.4
+    assert queue.inference_options["image_size"] == 320
 
 
 def test_get_task_status() -> None:
@@ -151,7 +179,7 @@ def test_create_video_task() -> None:
     client = TestClient(app)
 
     response = client.post(
-        "/api/v1/video-tasks",
+        "/api/v1/video-tasks?model_id=yolov8n&confidence=0.45&frame_stride=5&max_frames=10",
         files={"video": ("sample.mp4", b"fake-video-bytes", "video/mp4")},
     )
 
@@ -160,8 +188,12 @@ def test_create_video_task() -> None:
     body = response.json()
     assert body["status"] == "pending"
     assert body["filename"] == "sample.mp4"
+    assert body["model"] == "yolov8n"
+    assert body["frame_stride"] == 5
+    assert body["max_frames"] == 10
     assert queue.task_id == body["task_id"]
     assert queue.video_path.endswith("sample.mp4")
+    assert queue.inference_options["confidence"] == 0.45
 
 
 def test_rejects_non_video_upload() -> None:

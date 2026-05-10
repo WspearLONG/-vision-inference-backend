@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
@@ -11,12 +11,14 @@ from app.schemas import (
     BatchDetectCreateResponse,
     DetectResponse,
     HealthResponse,
+    ModelResponse,
     RootResponse,
     TaskArtifactsResponse,
     TaskStatusResponse,
     VideoTaskCreateResponse,
 )
 from app.services.detector import Detector, YOLODetector
+from app.services.model_registry import get_model_config, list_models, resolve_inference_options
 from app.services.queue import RedisTaskQueue, TaskQueue
 from app.services.storage import create_task_id, list_task_artifacts, read_task_result, save_uploads, save_video_upload
 from app.services.tasks import create_task_record, create_video_task_record, get_task_status_from_db, list_task_artifacts_from_db
@@ -58,11 +60,20 @@ def create_app() -> FastAPI:
                 "detect_image": "/api/v1/detect",
                 "batch_detect": "/api/v1/batch-detect",
                 "video_tasks": "/api/v1/video-tasks",
+                "models": "/api/v1/models",
                 "task_status": "/api/v1/tasks/{task_id}",
                 "task_result": "/api/v1/tasks/{task_id}/result",
                 "task_artifacts": "/api/v1/tasks/{task_id}/artifacts",
             },
         )
+
+    @app.get("/api/v1/models", response_model=list[ModelResponse])
+    def get_models() -> list[ModelResponse]:
+        return [ModelResponse(**model.model_dump()) for model in list_models()]
+
+    @app.get("/api/v1/models/{model_id}", response_model=ModelResponse)
+    def get_model(model_id: str) -> ModelResponse:
+        return ModelResponse(**get_model_config(model_id).model_dump())
 
     @app.get("/health", response_model=HealthResponse)
     def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
@@ -75,6 +86,9 @@ def create_app() -> FastAPI:
     @app.post("/api/v1/detect", response_model=DetectResponse)
     async def detect(
         image: UploadFile = File(...),
+        model_id: str | None = Query(default=None),
+        confidence: float | None = Query(default=None, ge=0, le=1),
+        image_size: int | None = Query(default=None, gt=0),
         settings: Settings = Depends(get_settings),
         detector: Detector = Depends(get_detector),
     ) -> DetectResponse:
@@ -92,38 +106,79 @@ def create_app() -> FastAPI:
                 detail=f"image exceeds {settings.max_upload_mb} MB upload limit",
             )
 
-        return detector.predict(image_bytes=image_bytes, filename=image.filename or "upload")
+        model, resolved_confidence, resolved_image_size = resolve_inference_options(model_id, confidence, image_size)
+        return detector.predict(
+            image_bytes=image_bytes,
+            filename=image.filename or "upload",
+            model_id=model.id,
+            confidence=resolved_confidence,
+            image_size=resolved_image_size,
+        )
 
     @app.post("/api/v1/batch-detect", response_model=BatchDetectCreateResponse, status_code=status.HTTP_202_ACCEPTED)
     async def batch_detect(
         images: list[UploadFile] = File(...),
+        model_id: str | None = Query(default=None),
+        confidence: float | None = Query(default=None, ge=0, le=1),
+        image_size: int | None = Query(default=None, gt=0),
         settings: Settings = Depends(get_settings),
         task_queue: TaskQueue = Depends(get_task_queue),
         db: Session = Depends(get_db),
     ) -> BatchDetectCreateResponse:
         task_id = create_task_id()
+        model, resolved_confidence, resolved_image_size = resolve_inference_options(model_id, confidence, image_size)
+        inference_options = {
+            "model_id": model.id,
+            "confidence": resolved_confidence,
+            "image_size": resolved_image_size,
+        }
         image_paths = await save_uploads(images, settings, task_id)
         create_task_record(db, task_id, image_paths)
-        task_queue.enqueue_batch_detect(task_id=task_id, image_paths=image_paths)
-        return BatchDetectCreateResponse(task_id=task_id, status="pending", total=len(image_paths))
+        task_queue.enqueue_batch_detect(task_id=task_id, image_paths=image_paths, inference_options=inference_options)
+        return BatchDetectCreateResponse(
+            task_id=task_id,
+            status="pending",
+            total=len(image_paths),
+            model=model.id,
+            confidence_threshold=resolved_confidence,
+            image_size=resolved_image_size,
+        )
 
     @app.post("/api/v1/video-tasks", response_model=VideoTaskCreateResponse, status_code=status.HTTP_202_ACCEPTED)
     async def create_video_task(
         video: UploadFile = File(...),
+        model_id: str | None = Query(default=None),
+        confidence: float | None = Query(default=None, ge=0, le=1),
+        image_size: int | None = Query(default=None, gt=0),
+        frame_stride: int | None = Query(default=None, gt=0),
+        max_frames: int | None = Query(default=None, gt=0),
         settings: Settings = Depends(get_settings),
         task_queue: TaskQueue = Depends(get_task_queue),
         db: Session = Depends(get_db),
     ) -> VideoTaskCreateResponse:
         task_id = create_task_id()
+        model, resolved_confidence, resolved_image_size = resolve_inference_options(model_id, confidence, image_size)
+        resolved_frame_stride = settings.video_frame_stride if frame_stride is None else frame_stride
+        resolved_max_frames = settings.max_video_frames if max_frames is None else max_frames
+        inference_options = {
+            "model_id": model.id,
+            "confidence": resolved_confidence,
+            "image_size": resolved_image_size,
+            "frame_stride": resolved_frame_stride,
+            "max_frames": resolved_max_frames,
+        }
         video_path = await save_video_upload(video, settings, task_id)
         create_video_task_record(db, task_id, video_path)
-        task_queue.enqueue_video_detect(task_id=task_id, video_path=video_path)
+        task_queue.enqueue_video_detect(task_id=task_id, video_path=video_path, inference_options=inference_options)
         return VideoTaskCreateResponse(
             task_id=task_id,
             status="pending",
             filename=Path(video_path).name,
-            frame_stride=settings.video_frame_stride,
-            max_frames=settings.max_video_frames,
+            frame_stride=resolved_frame_stride,
+            max_frames=resolved_max_frames,
+            model=model.id,
+            confidence_threshold=resolved_confidence,
+            image_size=resolved_image_size,
         )
 
     @app.get("/api/v1/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)

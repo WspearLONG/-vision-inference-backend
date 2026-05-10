@@ -10,20 +10,27 @@ from app.services.tasks import replace_task_artifacts, update_task_status, updat
 from app.services.visualization import render_detection_artifact
 
 
-def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
+def run_batch_detect(task_id: str, image_paths: list[str], inference_options: dict | None = None) -> dict:
     init_db()
     settings = get_settings()
     detector = YOLODetector(settings)
     job = get_current_job()
     results = []
     artifacts = []
+    options = inference_options or {}
 
     with SessionLocal() as db:
         update_task_status(db, task_id, status="running", completed=0)
         try:
             for index, image_path in enumerate(image_paths, start=1):
                 path = Path(image_path)
-                response = detector.predict(image_bytes=path.read_bytes(), filename=path.name)
+                response = detector.predict(
+                    image_bytes=path.read_bytes(),
+                    filename=path.name,
+                    model_id=options.get("model_id"),
+                    confidence=options.get("confidence"),
+                    image_size=options.get("image_size"),
+                )
                 results.append(response.model_dump())
                 artifacts.append(render_detection_artifact(settings, task_id, path, response))
 
@@ -38,6 +45,7 @@ def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
                 "completed": len(results),
                 "results": results,
                 "artifacts": artifacts,
+                "inference_options": options,
             }
             result_path = write_task_result(settings, task_id, payload)
             replace_task_artifacts(db, task_id, artifacts)
@@ -54,13 +62,14 @@ def run_batch_detect(task_id: str, image_paths: list[str]) -> dict:
             raise
 
 
-def run_video_detect(task_id: str, video_path: str) -> dict:
+def run_video_detect(task_id: str, video_path: str, inference_options: dict | None = None) -> dict:
     import cv2
 
     init_db()
     settings = get_settings()
     detector = YOLODetector(settings)
     job = get_current_job()
+    options = inference_options or {}
     video = Path(video_path)
     frame_dir = task_frame_dir(settings, task_id)
     frame_dir.mkdir(parents=True, exist_ok=True)
@@ -70,8 +79,9 @@ def run_video_detect(task_id: str, video_path: str) -> dict:
         raise ValueError(f"cannot open video: {video_path}")
 
     frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    stride = max(1, settings.video_frame_stride)
-    estimated_total = min(settings.max_video_frames, (frame_count + stride - 1) // stride) if frame_count else 0
+    stride = max(1, int(options.get("frame_stride") or settings.video_frame_stride))
+    max_frames = max(1, int(options.get("max_frames") or settings.max_video_frames))
+    estimated_total = min(max_frames, (frame_count + stride - 1) // stride) if frame_count else 0
 
     results = []
     artifacts = []
@@ -84,7 +94,7 @@ def run_video_detect(task_id: str, video_path: str) -> dict:
             update_task_total(db, task_id, estimated_total)
 
         try:
-            while processed < settings.max_video_frames:
+            while processed < max_frames:
                 ok, frame = capture.read()
                 if not ok:
                     break
@@ -100,7 +110,13 @@ def run_video_detect(task_id: str, video_path: str) -> dict:
                 if not encoded:
                     raise ValueError(f"cannot encode frame {frame_index}")
 
-                response = detector.predict(image_bytes=buffer.tobytes(), filename=frame_name)
+                response = detector.predict(
+                    image_bytes=buffer.tobytes(),
+                    filename=frame_name,
+                    model_id=options.get("model_id"),
+                    confidence=options.get("confidence"),
+                    image_size=options.get("image_size"),
+                )
                 result = response.model_dump()
                 result["frame_index"] = frame_index
                 results.append(result)
@@ -127,6 +143,7 @@ def run_video_detect(task_id: str, video_path: str) -> dict:
                 "completed": processed,
                 "results": results,
                 "artifacts": artifacts,
+                "inference_options": options,
             }
             result_path = write_task_result(settings, task_id, payload)
             replace_task_artifacts(db, task_id, artifacts)
