@@ -3,12 +3,15 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.db import get_db, init_db
 from app.schemas import BatchDetectCreateResponse, DetectResponse, HealthResponse, TaskArtifactsResponse, TaskStatusResponse
 from app.services.detector import Detector, YOLODetector
 from app.services.queue import RedisTaskQueue, TaskQueue
 from app.services.storage import create_task_id, list_task_artifacts, read_task_result, save_uploads
+from app.services.tasks import create_task_record, get_task_status_from_db, list_task_artifacts_from_db
 
 
 @lru_cache
@@ -32,6 +35,10 @@ def create_app() -> FastAPI:
     )
     Path(get_settings().output_dir).mkdir(parents=True, exist_ok=True)
     app.mount("/artifacts", StaticFiles(directory=get_settings().output_dir), name="artifacts")
+
+    @app.on_event("startup")
+    def startup() -> None:
+        init_db()
 
     @app.get("/health", response_model=HealthResponse)
     def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
@@ -68,20 +75,30 @@ def create_app() -> FastAPI:
         images: list[UploadFile] = File(...),
         settings: Settings = Depends(get_settings),
         task_queue: TaskQueue = Depends(get_task_queue),
+        db: Session = Depends(get_db),
     ) -> BatchDetectCreateResponse:
         task_id = create_task_id()
         image_paths = await save_uploads(images, settings, task_id)
+        create_task_record(db, task_id, image_paths)
         task_queue.enqueue_batch_detect(task_id=task_id, image_paths=image_paths)
         return BatchDetectCreateResponse(task_id=task_id, status="pending", total=len(image_paths))
 
     @app.get("/api/v1/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
-    def get_task_artifacts(task_id: str, settings: Settings = Depends(get_settings)) -> TaskArtifactsResponse:
-        artifacts = list_task_artifacts(settings, task_id)
+    def get_task_artifacts(
+        task_id: str,
+        settings: Settings = Depends(get_settings),
+        db: Session = Depends(get_db),
+    ) -> TaskArtifactsResponse:
+        artifacts = list_task_artifacts_from_db(db, task_id) or list_task_artifacts(settings, task_id)
         return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
 
     @app.get("/api/v1/task-artifacts/{task_id}", response_model=TaskArtifactsResponse)
-    def get_task_artifacts_alias(task_id: str, settings: Settings = Depends(get_settings)) -> TaskArtifactsResponse:
-        artifacts = list_task_artifacts(settings, task_id)
+    def get_task_artifacts_alias(
+        task_id: str,
+        settings: Settings = Depends(get_settings),
+        db: Session = Depends(get_db),
+    ) -> TaskArtifactsResponse:
+        artifacts = list_task_artifacts_from_db(db, task_id) or list_task_artifacts(settings, task_id)
         return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
 
     @app.get("/api/v1/tasks/{task_id}/result")
@@ -98,8 +115,15 @@ def create_app() -> FastAPI:
     def get_task_status(
         task_id: str,
         task_queue: TaskQueue = Depends(get_task_queue),
+        db: Session = Depends(get_db),
     ) -> TaskStatusResponse:
-        return task_queue.get_status(task_id)
+        queue_status = task_queue.get_status(task_id)
+        db_status = get_task_status_from_db(db, task_id)
+        if queue_status.status != "not_found":
+            return queue_status
+        if db_status is not None:
+            return db_status
+        return queue_status
 
     return app
 

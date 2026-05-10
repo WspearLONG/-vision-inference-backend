@@ -12,4 +12,6 @@ venv/
 runs/
 uploads/
 outputs/
-
+*.db
+*.sqlite
+*.sqlite3

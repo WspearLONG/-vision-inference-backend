@@ -90,6 +90,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 - `api`：FastAPI 接口服务
 - `worker`：RQ 后台任务进程
 - `redis`：任务队列
+- `postgres`：任务、图片、产物元数据持久化
 
 ## Conda 和 Docker 怎么配合
 
@@ -120,6 +121,26 @@ docker compose up --build
 ```bash
 pytest
 ```
+
+## 数据库存储
+
+本地开发默认使用 SQLite：
+
+```text
+vision.db
+```
+
+Docker Compose 环境使用 PostgreSQL：
+
+```text
+postgresql+psycopg://vision:vision@postgres:5432/vision_backend
+```
+
+数据库会记录：
+
+- `vision_tasks`：任务状态、总数、完成数、结果文件路径
+- `task_images`：每个任务的输入图片
+- `task_artifacts`：带框结果图路径和访问 URL
 
 ## 批量图片异步检测
 

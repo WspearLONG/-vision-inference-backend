@@ -5,6 +5,7 @@ services:
       - .env.example
     environment:
       REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg://vision:vision@postgres:5432/vision_backend
     ports:
       - "8000:8000"
     volumes:
@@ -13,6 +14,7 @@ services:
       - ./outputs:/app/outputs
     depends_on:
       - redis
+      - postgres
 
   worker:
     build: .
@@ -20,6 +22,7 @@ services:
       - .env.example
     environment:
       REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql+psycopg://vision:vision@postgres:5432/vision_backend
     command: python scripts/run_worker.py
     volumes:
       - ./runs:/app/runs
@@ -27,8 +30,23 @@ services:
       - ./outputs:/app/outputs
     depends_on:
       - redis
+      - postgres
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vision_backend
+      POSTGRES_USER: vision
+      POSTGRES_PASSWORD: vision
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

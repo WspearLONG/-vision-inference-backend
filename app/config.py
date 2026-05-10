@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     queue_name: str = "vision-tasks"
     upload_dir: str = "uploads"
     output_dir: str = "outputs"
+    database_url: str = "sqlite:///./vision.db"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
