@@ -142,6 +142,20 @@ postgresql+psycopg://vision:vision@postgres:5432/vision_backend
 - `task_images`：每个任务的输入图片
 - `task_artifacts`：带框结果图路径和访问 URL
 
+数据库结构由 Alembic 管理。执行迁移：
+
+```bash
+python scripts/migrate_db.py
+```
+
+启动 API 前自动执行迁移：
+
+```bash
+python scripts/start_api.py
+```
+
+GitHub Actions 会在 push 和 pull request 时自动执行编译检查和测试。
+
 ## 批量图片异步检测
 
 本地开发时可以只用 Docker 启动 Redis，然后用 Conda 环境分别启动 API 和 worker：
