@@ -27,3 +27,17 @@ class DetectResponse(BaseModel):
     detections: list[Detection]
     model: str
 
+
+class BatchDetectCreateResponse(BaseModel):
+    task_id: str
+    status: str
+    total: int
+
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str
+    total: int | None = None
+    completed: int | None = None
+    result_url: str | None = None
+    error: str | None = None

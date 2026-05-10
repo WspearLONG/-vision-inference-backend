@@ -3,8 +3,32 @@ services:
     build: .
     env_file:
       - .env.example
+    environment:
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     volumes:
       - ./runs:/app/runs
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+    depends_on:
+      - redis
 
+  worker:
+    build: .
+    env_file:
+      - .env.example
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    command: python scripts/run_worker.py
+    volumes:
+      - ./runs:/app/runs
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

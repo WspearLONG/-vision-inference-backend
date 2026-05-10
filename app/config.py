@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     confidence_threshold: float = 0.25
     image_size: int = 640
     max_upload_mb: int = 10
+    redis_url: str = "redis://localhost:6379/0"
+    queue_name: str = "vision-tasks"
+    upload_dir: str = "uploads"
+    output_dir: str = "outputs"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -17,4 +21,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

@@ -85,6 +85,12 @@ docker compose up --build
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 ```
 
+该 Compose 配置包含三个服务：
+
+- `api`：FastAPI 接口服务
+- `worker`：RQ 后台任务进程
+- `redis`：任务队列
+
 ## Conda 和 Docker 怎么配合
 
 推荐职责划分：
@@ -113,6 +119,55 @@ docker compose up --build
 
 ```bash
 pytest
+```
+
+## 批量图片异步检测
+
+本地开发时可以只用 Docker 启动 Redis，然后用 Conda 环境分别启动 API 和 worker：
+
+```bash
+docker compose up -d redis
+conda activate vision-inference-backend
+uvicorn app.main:app --reload
+```
+
+另开一个终端启动 worker：
+
+```bash
+conda activate vision-inference-backend
+python scripts/run_worker.py
+```
+
+只处理当前队列中的任务并退出：
+
+```bash
+python scripts/run_worker.py --burst
+```
+
+创建批量检测任务：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/batch-detect" ^
+  -F "images=@path/to/image-1.jpg" ^
+  -F "images=@path/to/image-2.jpg"
+```
+
+查询任务状态：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/tasks/{task_id}"
+```
+
+查询任务结果：
+
+```bash
+curl "http://127.0.0.1:8000/api/v1/tasks/{task_id}/result"
+```
+
+结果会保存到：
+
+```text
+outputs/{task_id}.json
 ```
 
 ## 后续路线
