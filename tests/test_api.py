@@ -64,6 +64,17 @@ def test_health() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_root() -> None:
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["docs"] == "/docs"
+    assert body["endpoints"]["video_tasks"] == "/api/v1/video-tasks"
+
+
 def test_detect_image() -> None:
     app.dependency_overrides[get_detector] = lambda: StubDetector()
     client = TestClient(app)

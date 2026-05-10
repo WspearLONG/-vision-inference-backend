@@ -7,6 +7,13 @@ class HealthResponse(BaseModel):
     environment: str
 
 
+class RootResponse(BaseModel):
+    service: str
+    docs: str
+    health: str
+    endpoints: dict[str, str]
+
+
 class BoundingBox(BaseModel):
     x1: float
     y1: float

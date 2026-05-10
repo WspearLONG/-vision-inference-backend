@@ -11,6 +11,7 @@ from app.schemas import (
     BatchDetectCreateResponse,
     DetectResponse,
     HealthResponse,
+    RootResponse,
     TaskArtifactsResponse,
     TaskStatusResponse,
     VideoTaskCreateResponse,
@@ -46,6 +47,22 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def startup() -> None:
         init_db()
+
+    @app.get("/", response_model=RootResponse)
+    def root(settings: Settings = Depends(get_settings)) -> RootResponse:
+        return RootResponse(
+            service=settings.app_name,
+            docs="/docs",
+            health="/health",
+            endpoints={
+                "detect_image": "/api/v1/detect",
+                "batch_detect": "/api/v1/batch-detect",
+                "video_tasks": "/api/v1/video-tasks",
+                "task_status": "/api/v1/tasks/{task_id}",
+                "task_result": "/api/v1/tasks/{task_id}/result",
+                "task_artifacts": "/api/v1/tasks/{task_id}/artifacts",
+            },
+        )
 
     @app.get("/health", response_model=HealthResponse)
     def health(settings: Settings = Depends(get_settings)) -> HealthResponse:
