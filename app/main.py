@@ -74,12 +74,15 @@ def create_app() -> FastAPI:
         task_queue.enqueue_batch_detect(task_id=task_id, image_paths=image_paths)
         return BatchDetectCreateResponse(task_id=task_id, status="pending", total=len(image_paths))
 
-    @app.get("/api/v1/tasks/{task_id}", response_model=TaskStatusResponse)
-    def get_task_status(
-        task_id: str,
-        task_queue: TaskQueue = Depends(get_task_queue),
-    ) -> TaskStatusResponse:
-        return task_queue.get_status(task_id)
+    @app.get("/api/v1/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
+    def get_task_artifacts(task_id: str, settings: Settings = Depends(get_settings)) -> TaskArtifactsResponse:
+        artifacts = list_task_artifacts(settings, task_id)
+        return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
+
+    @app.get("/api/v1/task-artifacts/{task_id}", response_model=TaskArtifactsResponse)
+    def get_task_artifacts_alias(task_id: str, settings: Settings = Depends(get_settings)) -> TaskArtifactsResponse:
+        artifacts = list_task_artifacts(settings, task_id)
+        return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
 
     @app.get("/api/v1/tasks/{task_id}/result")
     def get_task_result(task_id: str, settings: Settings = Depends(get_settings)) -> dict:
@@ -91,10 +94,12 @@ def create_app() -> FastAPI:
             )
         return result
 
-    @app.get("/api/v1/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
-    def get_task_artifacts(task_id: str, settings: Settings = Depends(get_settings)) -> TaskArtifactsResponse:
-        artifacts = list_task_artifacts(settings, task_id)
-        return TaskArtifactsResponse(task_id=task_id, artifacts=artifacts)
+    @app.get("/api/v1/tasks/{task_id}", response_model=TaskStatusResponse)
+    def get_task_status(
+        task_id: str,
+        task_queue: TaskQueue = Depends(get_task_queue),
+    ) -> TaskStatusResponse:
+        return task_queue.get_status(task_id)
 
     return app
 
