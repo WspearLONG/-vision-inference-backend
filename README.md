@@ -25,12 +25,32 @@ scripts/
   smoke_request.py       # 手动请求脚本
 ```
 
+## 环境隔离
+
+本项目使用独立 Conda 环境，环境名为 `vision-inference-backend`。建议每个代码库都维护自己的 `environment.yml`，避免不同项目之间的依赖互相污染。
+
+创建环境：
+
+```bash
+conda env create -f environment.yml
+```
+
+激活环境：
+
+```bash
+conda activate vision-inference-backend
+```
+
+如果依赖有变化，更新环境：
+
+```bash
+conda env update -f environment.yml --prune
+```
+
 ## 本地运行
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+conda activate vision-inference-backend
 uvicorn app.main:app --reload
 ```
 
@@ -59,6 +79,36 @@ curl -X POST "http://127.0.0.1:8000/api/v1/detect" ^
 docker compose up --build
 ```
 
+开发模式运行，代码改动后容器内服务会自动 reload：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+## Conda 和 Docker 怎么配合
+
+推荐职责划分：
+
+- Conda：本机开发、调试、跑测试。每个代码库一个独立环境，避免污染电脑里的其他项目。
+- Docker：部署、交付、复现线上环境。容器里不依赖你本机 Conda 环境。
+- `requirements.txt`：Conda 和 Docker 共用的 Python 依赖来源。
+- `environment.yml`：只负责创建本项目的 Conda 开发环境，并通过 `-r requirements.txt` 安装依赖。
+- `Dockerfile`：只负责构建容器运行环境，同样安装 `requirements.txt`。
+
+日常开发流程：
+
+```bash
+conda activate vision-inference-backend
+pytest
+uvicorn app.main:app --reload
+```
+
+提交前验证容器能跑：
+
+```bash
+docker compose up --build
+```
+
 ## 测试
 
 ```bash
@@ -73,4 +123,3 @@ pytest
 - 导出 ONNX，接入 Triton Inference Server
 - 增加 Prometheus 指标：QPS、P95 延迟、错误率、模型耗时
 - 增加鉴权、限流和用户维度的任务隔离
-
