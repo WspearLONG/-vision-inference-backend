@@ -15,6 +15,7 @@ def main() -> None:
             args.url,
             files={"image": (args.image.name, image_file, "image/jpeg")},
             timeout=60,
+            trust_env=False,
         )
     response.raise_for_status()
     print(response.json())
@@ -22,4 +23,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
